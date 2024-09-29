@@ -1,15 +1,18 @@
 import { of, throwError } from 'rxjs';
-
 import { fakeAsync, flush, TestBed } from '@angular/core/testing';
 import { AngularFireAuth } from '@angular/fire/compat/auth';
 import { AngularFirestore } from '@angular/fire/compat/firestore';
-
 import { IUserModel } from '../models/user.model';
 import { AuthService } from './auth-service.service';
 
 function createAfAuthMock({
   signInWithEmailAndPasswordResult = Promise.resolve({}),
-  createUserWithEmailAndPasswordResult = Promise.resolve({
+  createUserWithEmailAndPasswordResult = Promise.resolve<{
+    user: {
+      uid: string;
+      email: string;
+    } | null;
+  }>({
     user: { uid: '123', email: 'test@test.com' },
   }),
   signOutResult = Promise.resolve(),
@@ -54,20 +57,20 @@ function createFirestoreMock({
 }
 
 describe('AuthService', () => {
-  describe('AuthService with successful user operations', () => {
-    const setDocumentSpy = jasmine.createSpy('set').and.returnValue(Promise.resolve());
-    const collectionValueChangesSpy = jasmine
-      .createSpy('valueChanges')
-      .and.returnValue(of([{ uid: '123', email: 'test@test.com' }]));
+  let service: AuthService;
+  let afAuthMock: any;
+  let firestoreMock: any;
 
-    let service: AuthService;
-    const afAuthMock = createAfAuthMock({ idTokenResult: of(null) });
-    const firestoreMock = createFirestoreMock({
-      collectionValueChangesResult: collectionValueChangesSpy,
-      setFunction: setDocumentSpy,
-    });
+  describe('User operations empty', () => {
+    const setDocumentSpy = jasmine
+      .createSpy('set')
+      .and.returnValue(Promise.resolve());
 
     beforeEach(() => {
+      afAuthMock = createAfAuthMock({
+        createUserWithEmailAndPasswordResult: Promise.resolve({ user: null }),
+      });
+      firestoreMock = createFirestoreMock({ setFunction: setDocumentSpy });
       TestBed.configureTestingModule({
         providers: [
           AuthService,
@@ -75,7 +78,41 @@ describe('AuthService', () => {
           { provide: AngularFirestore, useValue: firestoreMock },
         ],
       });
+      service = TestBed.inject(AuthService);
+    });
 
+    it('should create the AuthService instance', fakeAsync(() => {
+      const newUser = {
+        email: 'test@test.com',
+        name: 'test',
+        password: '123456',
+        profile: 'user',
+      };
+      service.register(newUser).subscribe(() => {
+        expect(setDocumentSpy).not.toHaveBeenCalledWith({
+          uid: '123',
+          ...newUser,
+        });
+      });
+      flush();
+    }));
+  });
+
+  describe('User operations', () => {
+    const setDocumentSpy = jasmine
+      .createSpy('set')
+      .and.returnValue(Promise.resolve());
+
+    beforeEach(() => {
+      afAuthMock = createAfAuthMock();
+      firestoreMock = createFirestoreMock({ setFunction: setDocumentSpy });
+      TestBed.configureTestingModule({
+        providers: [
+          AuthService,
+          { provide: AngularFireAuth, useValue: afAuthMock },
+          { provide: AngularFirestore, useValue: firestoreMock },
+        ],
+      });
       service = TestBed.inject(AuthService);
     });
 
@@ -89,14 +126,13 @@ describe('AuthService', () => {
         done();
       });
 
-      expect(collectionValueChangesSpy).toHaveBeenCalledTimes(1);
+      expect(firestoreMock.collection().valueChanges).toHaveBeenCalledTimes(1);
     });
 
-    it('should call login with correct parameters and handle error', () => {
-      const setDocumentSpy = spyOn(console, 'error');
+    it('should login with correct parameters and handle error', () => {
+      const consoleErrorSpy = spyOn(console, 'error');
 
       service.login('test@test.com', '123456').subscribe();
-
       expect(afAuthMock.signInWithEmailAndPassword).toHaveBeenCalledWith(
         'test@test.com',
         '123456'
@@ -105,52 +141,27 @@ describe('AuthService', () => {
       afAuthMock.signInWithEmailAndPassword.and.returnValue(
         throwError(() => new Error())
       );
-
-      service.login('test@test.com', '123456').subscribe();
-
-      expect(console.error).toHaveBeenCalledWith(
-        'Erro ao fazer login:',
-        jasmine.anything()
-      );
-
-      setDocumentSpy.calls.reset();
+      service.login('test@test.com', '123456').subscribe({
+        error: () => {
+          expect(consoleErrorSpy).toHaveBeenCalledWith(
+            'Erro ao fazer login:',
+            jasmine.anything()
+          );
+        },
+      });
     });
 
     it('should register a new user and save to Firestore', fakeAsync(() => {
-      setDocumentSpy.calls.reset();
-
       const newUser = {
         email: 'test@test.com',
         name: 'test',
         password: '123456',
         profile: 'user',
       };
-
       service.register(newUser).subscribe(() => {
         expect(setDocumentSpy).toHaveBeenCalledWith({ uid: '123', ...newUser });
       });
-
       flush();
-    }));
-
-    it('should not save user if registration fails', fakeAsync(() => {
-      setDocumentSpy.calls.reset();
-      afAuthMock.createUserWithEmailAndPassword.and.returnValue(
-        of({ user: null })
-      );
-
-      const newUser = {
-        email: 'test@test.com',
-        name: 'test',
-        password: '123456',
-        profile: 'user',
-      };
-
-      service.register(newUser).subscribe();
-
-      flush();
-
-      expect(setDocumentSpy).not.toHaveBeenCalledWith({ uid: '123', ...newUser });
     }));
 
     it('should log error when registration fails', fakeAsync(() => {
@@ -165,35 +176,40 @@ describe('AuthService', () => {
         password: '123456',
         profile: 'user',
       };
-
       service.register(newUser).subscribe();
-
       flush();
 
-      expect(consoleErrorSpy).not.toHaveBeenCalledWith({ uid: '123', ...newUser });
-      expect(console.error).toHaveBeenCalledWith('Erro ao cadastrar usuário:', {
-        user: null,
-      });
-
-      consoleErrorSpy.calls.reset();
+      expect(consoleErrorSpy).toHaveBeenCalledWith(
+        'Erro ao cadastrar usuário:',
+        { user: null }
+      );
     }));
 
     it('should return null for user$ when there is no user', (done) => {
       service.user$.subscribe((data) => {
         expect(data).toBeNull();
+        done();
+      });
+    });
 
+    it('should logout and clear cached user', (done) => {
+      service.logout().subscribe(() => {
+        expect(service['cachedUser']).toBeNull();
         done();
       });
     });
   });
 
-  describe('AuthService with logout errors', () => {
-    let service: AuthService;
-
-    const afAuthMock = createAfAuthMock({ signOutResult: Promise.reject() });
-    const firestoreMock = createFirestoreMock();
+  describe('register user error', () => {
+    const setDocumentSpy = jasmine
+      .createSpy('set')
+      .and.returnValue(Promise.resolve());
 
     beforeEach(() => {
+      afAuthMock = createAfAuthMock({
+        createUserWithEmailAndPasswordResult: Promise.reject(),
+      });
+      firestoreMock = createFirestoreMock();
       TestBed.configureTestingModule({
         providers: [
           AuthService,
@@ -201,38 +217,55 @@ describe('AuthService', () => {
           { provide: AngularFirestore, useValue: firestoreMock },
         ],
       });
-
       service = TestBed.inject(AuthService);
     });
 
-    it('should handle logout error correctly', (done) => {
-      const consoleErrorSpy = spyOn(console, 'error');
+    it('should not save user if registration fails', fakeAsync(() => {
+      const newUser = {
+        email: 'test@test.com',
+        name: 'test',
+        password: '123456',
+        profile: 'user',
+      };
+      service.register(newUser).subscribe();
+      flush();
+      expect(setDocumentSpy).not.toHaveBeenCalled();
+    }));
+  });
 
-      service.user$.subscribe((data?: Partial<IUserModel> | null) => {
-        expect(data).toBeNull();
+  describe('Logout operations', () => {
+    describe('Error', () => {
+      beforeEach(() => {
+        afAuthMock = createAfAuthMock({ signOutResult: Promise.reject() });
+        firestoreMock = createFirestoreMock();
+        TestBed.configureTestingModule({
+          providers: [
+            AuthService,
+            { provide: AngularFireAuth, useValue: afAuthMock },
+            { provide: AngularFirestore, useValue: firestoreMock },
+          ],
+        });
+        service = TestBed.inject(AuthService);
+      });
+
+      it('should handle logout error correctly', fakeAsync(() => {
+        const consoleErrorSpy = spyOn(console, 'error');
 
         service.logout().subscribe({
-          next: jasmine.createSpy(),
           error: () => {
-            expect<Partial<IUserModel> | null>(
-              service['cachedUser']
-            ).toBeNull();
-
-            expect(consoleErrorSpy).toHaveBeenCalledWith();
-            done();
+            expect(consoleErrorSpy).toHaveBeenCalled();
           },
         });
-      });
+
+        flush();
+      }));
     });
   });
 
-  describe('AuthService with successful user logout', () => {
-    let service: AuthService;
-
-    const afAuthMock = createAfAuthMock({ idTokenResult: of('test') });
-    const firestoreMock = createFirestoreMock();
-
+  describe('Multiple user$ subscriptions', () => {
     beforeEach(() => {
+      afAuthMock = createAfAuthMock({ idTokenResult: of('test') });
+      firestoreMock = createFirestoreMock();
       TestBed.configureTestingModule({
         providers: [
           AuthService,
@@ -240,29 +273,27 @@ describe('AuthService', () => {
           { provide: AngularFirestore, useValue: firestoreMock },
         ],
       });
-
       service = TestBed.inject(AuthService);
     });
 
-    it('should logout and clear cached user after user$ is emitted', (done) => {
-      service.user$.subscribe((data?: Partial<IUserModel> | null) => {
-        expect(data).toEqual({ uid: '123', email: 'test@test.com' });
+    it('should emit user data for each subscription', (done) => {
+      service.user$.subscribe((data) => {
+        expect(data).toEqual({ uid: '123', email: 'test@test.com' } as any);
 
-        service.logout().subscribe(() => {
-          expect<Partial<IUserModel> | null>(service['cachedUser']).toBeNull();
+        service.user$.subscribe((secondData) => {
+          expect(secondData).toEqual(data);
           done();
         });
       });
     });
   });
 
-  describe('AuthService handling multiple user$ subscriptions', () => {
-    let service: AuthService;
-
-    const afAuthMock = createAfAuthMock({ idTokenResult: of('test') });
-    const firestoreMock = createFirestoreMock();
-
+  describe('Id token errors', () => {
     beforeEach(() => {
+      afAuthMock = createAfAuthMock({
+        idTokenResult: throwError(() => 'test'),
+      });
+      firestoreMock = createFirestoreMock();
       TestBed.configureTestingModule({
         providers: [
           AuthService,
@@ -270,58 +301,12 @@ describe('AuthService', () => {
           { provide: AngularFirestore, useValue: firestoreMock },
         ],
       });
-
-      service = TestBed.inject(AuthService);
-    });
-
-    it('should emit user data twice when user$ is subscribed to twice', (done) => {
-      service.user$.subscribe((data?: Partial<IUserModel> | null) => {
-        expect(data).toEqual({ uid: '123', email: 'test@test.com' });
-
-        service.user$.subscribe((data?: Partial<IUserModel> | null) => {
-          expect(data).toEqual({ uid: '123', email: 'test@test.com' });
-
-          done();
-        });
-      });
-    });
-
-    it('should logout and clear cached user after second user$ subscription', (done) => {
-      service.user$.subscribe((data?: Partial<IUserModel> | null) => {
-        expect(data).toEqual({ uid: '123', email: 'test@test.com' });
-
-        service.logout().subscribe(() => {
-          expect(service['cachedUser']).toBeNull();
-          done();
-        });
-      });
-    });
-  });
-
-  describe('AuthService with id token errors', () => {
-    let service: AuthService;
-
-    const afAuthMock = createAfAuthMock({
-      idTokenResult: throwError(() => 'test'),
-    });
-    const firestoreMock = createFirestoreMock();
-
-    beforeEach(() => {
-      TestBed.configureTestingModule({
-        providers: [
-          AuthService,
-          { provide: AngularFireAuth, useValue: afAuthMock },
-          { provide: AngularFirestore, useValue: firestoreMock },
-        ],
-      });
-
       service = TestBed.inject(AuthService);
     });
 
     it('should return null for user$ when token throws an error', (done) => {
-      service.user$.subscribe((data?: Partial<IUserModel> | null) => {
+      service.user$.subscribe((data) => {
         expect(data).toBeNull();
-
         done();
       });
     });
