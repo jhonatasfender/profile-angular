@@ -1,0 +1,28 @@
+<div class="login-container">
+  <form [formGroup]="form" (submit)="login()" class="login-form">
+    <mat-form-field class="full-width">
+      <mat-label>Email</mat-label>
+      <input matInput formControlName="email" />
+      <mat-error *ngIf="form.get('email')?.hasError('required')">
+        O email é obrigatório
+      </mat-error>
+    </mat-form-field>
+
+    <mat-form-field class="full-width">
+      <mat-label>Senha</mat-label>
+      <input type="password" matInput formControlName="senha" />
+      <mat-error *ngIf="form.get('senha')?.hasError('required')">
+        A senha é obrigatória
+      </mat-error>
+    </mat-form-field>
+
+    <button type="submit" mat-stroked-button class="submit-button" [disabled]="!form.valid || isLoading">
+      <ng-container *ngIf="!isLoading; else loading">
+        Entrar
+      </ng-container>
+      <ng-template #loading>
+        <mat-spinner [diameter]="20" />
+      </ng-template>
+    </button>
+  </form>
+</div>

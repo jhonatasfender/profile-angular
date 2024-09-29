@@ -1,0 +1,32 @@
+<div class="form-container">
+  <form [formGroup]="form" (submit)="save()">
+    <mat-form-field class="full-width-field">
+      <mat-label>Name</mat-label>
+      <input matInput formControlName="name" />
+    </mat-form-field>
+
+    <mat-form-field class="full-width-field">
+      <mat-label>Email</mat-label>
+      <input matInput formControlName="email" />
+    </mat-form-field>
+
+    <mat-form-field>
+      <mat-label>Password</mat-label>
+      <input type="password" matInput formControlName="password" />
+    </mat-form-field>
+
+    <mat-form-field class="full-width-field">
+      <mat-label>Profile</mat-label>
+      <select matNativeControl formControlName="profile">
+        <option value="administrator">Administrador</option>
+        <option value="user">Usuário</option>
+      </select>
+    </mat-form-field>
+
+    <mat-dialog-actions class="full-width-actions">
+      <button type="submit" mat-stroked-button [disabled]="!form.valid">
+        Save
+      </button>
+    </mat-dialog-actions>
+  </form>
+</div>

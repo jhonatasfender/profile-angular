@@ -1,0 +1,26 @@
+.form-container {
+  display: flex;
+  width: 500px;
+  height: 500px;
+  justify-content: center;
+}
+
+form {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  margin: 10px;
+}
+
+.full-width-field {
+  width: 100%;
+}
+
+.full-width-actions {
+  width: 100%;
+
+  button {
+    width: 100%;
+    min-height: 50px;
+  }
+}

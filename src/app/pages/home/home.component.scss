@@ -1,0 +1,78 @@
+.user-management-container {
+  display: flex;
+  flex-direction: column;
+  padding: 20px;
+  background-color: #f5f5f5;
+  border-radius: 8px;
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+  max-width: 1200px;
+  margin: 20px auto;
+}
+
+.user-management-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 20px;
+}
+
+.add-user-button {
+  background-color: #1976d2;
+  color: white;
+  border-radius: 4px;
+  padding: 10px 20px;
+  font-size: 14px;
+  font-weight: bold;
+  text-transform: uppercase;
+
+  &:hover {
+    background-color: #1565c0;
+  }
+}
+
+.logout-button {
+  background-color: #f44336;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  padding: 10px 20px;
+  font-size: 14px;
+  text-transform: uppercase;
+  cursor: pointer;
+
+  &:hover {
+    background-color: #e53935;
+  }
+}
+
+.user-profile-display {
+  margin-bottom: 20px;
+  font-size: 16px;
+  font-weight: bold;
+}
+
+.user-profile-text {
+  padding: 8px 16px;
+  background-color: #eeeeee;
+  border-radius: 4px;
+}
+
+.user-table {
+  width: 100%;
+  border-collapse: separate;
+  border-spacing: 0 10px;
+
+  th {
+    font-weight: bold;
+    text-align: left;
+    padding: 10px 20px;
+    background-color: #e0e0e0;
+  }
+
+  td {
+    padding: 10px 20px;
+    background-color: #ffffff;
+    border-radius: 4px;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+  }
+}
