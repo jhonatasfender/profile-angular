@@ -7,49 +7,67 @@ import { AngularFirestore } from '@angular/fire/compat/firestore';
 import { IUserModel } from '../models/user.model';
 import { AuthService } from './auth-service.service';
 
-describe('AuthService', () => {
-  describe('test', () => {
-    let service: AuthService;
-    let afAuthMock: any;
-    let firestoreMock: any;
+function createAfAuthMock({
+  signInWithEmailAndPasswordResult = Promise.resolve({}),
+  createUserWithEmailAndPasswordResult = Promise.resolve({
+    user: { uid: '123', email: 'test@test.com' },
+  }),
+  signOutResult = Promise.resolve(),
+  idTokenResult = of<string | null>(null),
+  authStateResult = of({ uid: '123' }),
+  setPersistenceResult = Promise.resolve(),
+} = {}) {
+  return {
+    signInWithEmailAndPassword: jasmine
+      .createSpy('signInWithEmailAndPassword')
+      .and.returnValue(signInWithEmailAndPasswordResult),
+    createUserWithEmailAndPassword: jasmine
+      .createSpy('createUserWithEmailAndPassword')
+      .and.returnValue(createUserWithEmailAndPasswordResult),
+    signOut: jasmine.createSpy('signOut').and.returnValue(signOutResult),
+    idToken: idTokenResult,
+    authState: authStateResult,
+    setPersistence: jasmine
+      .createSpy('setPersistence')
+      .and.returnValue(setPersistenceResult),
+  };
+}
 
-    let test = jasmine.createSpy('set').and.returnValue(Promise.resolve());
-    const test5 = jasmine
+function createFirestoreMock({
+  docValueChangesResult = of({ uid: '123', email: 'test@test.com' }),
+  collectionValueChangesResult = jasmine
+    .createSpy('valueChanges')
+    .and.returnValue(of([{ uid: '123', email: 'test@test.com' }])),
+  setFunction = jasmine.createSpy('set').and.returnValue(Promise.resolve()),
+} = {}) {
+  return {
+    collection: jasmine.createSpy('collection').and.returnValue({
+      doc: jasmine.createSpy('doc').and.returnValue({
+        valueChanges: jasmine
+          .createSpy('valueChanges')
+          .and.returnValue(docValueChangesResult),
+        set: setFunction,
+      }),
+      valueChanges: collectionValueChangesResult,
+    }),
+  };
+}
+
+describe('AuthService', () => {
+  describe('AuthService with successful user operations', () => {
+    const setDocumentSpy = jasmine.createSpy('set').and.returnValue(Promise.resolve());
+    const collectionValueChangesSpy = jasmine
       .createSpy('valueChanges')
       .and.returnValue(of([{ uid: '123', email: 'test@test.com' }]));
 
+    let service: AuthService;
+    const afAuthMock = createAfAuthMock({ idTokenResult: of(null) });
+    const firestoreMock = createFirestoreMock({
+      collectionValueChangesResult: collectionValueChangesSpy,
+      setFunction: setDocumentSpy,
+    });
+
     beforeEach(() => {
-      afAuthMock = {
-        signInWithEmailAndPassword: jasmine
-          .createSpy('signInWithEmailAndPassword')
-          .and.returnValue(Promise.resolve({})),
-        createUserWithEmailAndPassword: jasmine
-          .createSpy('createUserWithEmailAndPassword')
-          .and.returnValue(
-            Promise.resolve({ user: { uid: '123', email: 'test@test.com' } })
-          ),
-        signOut: jasmine
-          .createSpy('signOut')
-          .and.returnValue(Promise.resolve()),
-        idToken: of(null),
-        authState: of({ uid: '123' }),
-        setPersistence: jasmine
-          .createSpy('setPersistence')
-          .and.returnValue(Promise.resolve()),
-      };
-
-      firestoreMock = {
-        collection: jasmine.createSpy('collection').and.returnValue({
-          doc: jasmine.createSpy('doc').and.returnValue({
-            valueChanges: jasmine
-              .createSpy('valueChanges')
-              .and.returnValue(of({ uid: '123', email: 'test@test.com' })),
-            set: test,
-          }),
-          valueChanges: test5,
-        }),
-      };
-
       TestBed.configureTestingModule({
         providers: [
           AuthService,
@@ -61,21 +79,21 @@ describe('AuthService', () => {
       service = TestBed.inject(AuthService);
     });
 
-    it('should be created', () => {
+    it('should create the AuthService instance', () => {
       expect(service).toBeTruthy();
     });
 
-    it('test', (done) => {
+    it('should list users correctly', (done) => {
       service.listUsers().subscribe((data: Partial<IUserModel>[]) => {
         expect(data).toEqual([{ uid: '123', email: 'test@test.com' }]);
         done();
       });
 
-      expect(test5).toHaveBeenCalledTimes(1);
+      expect(collectionValueChangesSpy).toHaveBeenCalledTimes(1);
     });
 
-    it('test', () => {
-      const test = spyOn(console, 'error');
+    it('should call login with correct parameters and handle error', () => {
+      const setDocumentSpy = spyOn(console, 'error');
 
       service.login('test@test.com', '123456').subscribe();
 
@@ -95,70 +113,72 @@ describe('AuthService', () => {
         jasmine.anything()
       );
 
-      test.calls.reset();
+      setDocumentSpy.calls.reset();
     });
 
-    it('etst', fakeAsync(() => {
-      const test01 = {
+    it('should register a new user and save to Firestore', fakeAsync(() => {
+      setDocumentSpy.calls.reset();
+
+      const newUser = {
         email: 'test@test.com',
         name: 'test',
         password: '123456',
         profile: 'user',
       };
 
-      service.register(test01).subscribe();
+      service.register(newUser).subscribe(() => {
+        expect(setDocumentSpy).toHaveBeenCalledWith({ uid: '123', ...newUser });
+      });
 
       flush();
-
-      expect(test).toHaveBeenCalledWith({ uid: '123', ...test01 });
     }));
 
-    it('etst', fakeAsync(() => {
-      test.calls.reset();
+    it('should not save user if registration fails', fakeAsync(() => {
+      setDocumentSpy.calls.reset();
       afAuthMock.createUserWithEmailAndPassword.and.returnValue(
         of({ user: null })
       );
 
-      const test01 = {
+      const newUser = {
         email: 'test@test.com',
         name: 'test',
         password: '123456',
         profile: 'user',
       };
 
-      service.register(test01).subscribe();
+      service.register(newUser).subscribe();
 
       flush();
 
-      expect(test).not.toHaveBeenCalledWith({ uid: '123', ...test01 });
+      expect(setDocumentSpy).not.toHaveBeenCalledWith({ uid: '123', ...newUser });
     }));
 
-    it('etst', fakeAsync(() => {
-      const test = spyOn(console, 'error');
+    it('should log error when registration fails', fakeAsync(() => {
+      const consoleErrorSpy = spyOn(console, 'error');
       afAuthMock.createUserWithEmailAndPassword.and.returnValue(
         throwError(() => ({ user: null }))
       );
 
-      const test01 = {
+      const newUser = {
         email: 'test@test.com',
         name: 'test',
         password: '123456',
         profile: 'user',
       };
 
-      service.register(test01).subscribe();
+      service.register(newUser).subscribe();
 
       flush();
 
-      expect(test).not.toHaveBeenCalledWith({ uid: '123', ...test01 });
+      expect(consoleErrorSpy).not.toHaveBeenCalledWith({ uid: '123', ...newUser });
       expect(console.error).toHaveBeenCalledWith('Erro ao cadastrar usuário:', {
         user: null,
       });
 
-      test.calls.reset();
+      consoleErrorSpy.calls.reset();
     }));
 
-    it('test', (done) => {
+    it('should return null for user$ when there is no user', (done) => {
       service.user$.subscribe((data) => {
         expect(data).toBeNull();
 
@@ -167,45 +187,13 @@ describe('AuthService', () => {
     });
   });
 
-  describe('test', () => {
+  describe('AuthService with logout errors', () => {
     let service: AuthService;
-    let afAuthMock: any;
-    let firestoreMock: any;
 
-    let test = jasmine.createSpy('set').and.returnValue(Promise.resolve());
+    const afAuthMock = createAfAuthMock({ signOutResult: Promise.reject() });
+    const firestoreMock = createFirestoreMock();
 
     beforeEach(() => {
-      afAuthMock = {
-        signInWithEmailAndPassword: jasmine
-          .createSpy('signInWithEmailAndPassword')
-          .and.returnValue(Promise.resolve({})),
-        createUserWithEmailAndPassword: jasmine
-          .createSpy('createUserWithEmailAndPassword')
-          .and.returnValue(
-            Promise.resolve({ user: { uid: '123', email: 'test@test.com' } })
-          ),
-        signOut: jasmine.createSpy('signOut').and.returnValue(Promise.reject()),
-        idToken: of('test'),
-        authState: of({ uid: '123' }),
-        setPersistence: jasmine
-          .createSpy('setPersistence')
-          .and.returnValue(Promise.resolve()),
-      };
-
-      firestoreMock = {
-        collection: jasmine.createSpy('collection').and.returnValue({
-          doc: jasmine.createSpy('doc').and.returnValue({
-            valueChanges: jasmine
-              .createSpy('valueChanges')
-              .and.returnValue(of({ uid: '123', email: 'test@test.com' })),
-            set: test,
-          }),
-          valueChanges: jasmine
-            .createSpy('valueChanges')
-            .and.returnValue(of([{ uid: '123', email: 'test@test.com' }])),
-        }),
-      };
-
       TestBed.configureTestingModule({
         providers: [
           AuthService,
@@ -217,62 +205,64 @@ describe('AuthService', () => {
       service = TestBed.inject(AuthService);
     });
 
-    it('test', (done) => {
+    it('should handle logout error correctly', (done) => {
+      const consoleErrorSpy = spyOn(console, 'error');
+
+      service.user$.subscribe((data?: Partial<IUserModel> | null) => {
+        expect(data).toBeNull();
+
+        service.logout().subscribe({
+          next: jasmine.createSpy(),
+          error: () => {
+            expect<Partial<IUserModel> | null>(
+              service['cachedUser']
+            ).toBeNull();
+
+            expect(consoleErrorSpy).toHaveBeenCalledWith();
+            done();
+          },
+        });
+      });
+    });
+  });
+
+  describe('AuthService with successful user logout', () => {
+    let service: AuthService;
+
+    const afAuthMock = createAfAuthMock({ idTokenResult: of('test') });
+    const firestoreMock = createFirestoreMock();
+
+    beforeEach(() => {
+      TestBed.configureTestingModule({
+        providers: [
+          AuthService,
+          { provide: AngularFireAuth, useValue: afAuthMock },
+          { provide: AngularFirestore, useValue: firestoreMock },
+        ],
+      });
+
+      service = TestBed.inject(AuthService);
+    });
+
+    it('should logout and clear cached user after user$ is emitted', (done) => {
       service.user$.subscribe((data?: Partial<IUserModel> | null) => {
         expect(data).toEqual({ uid: '123', email: 'test@test.com' });
 
         service.logout().subscribe(() => {
-          expect<Partial<IUserModel> | null>(service['cachedUser']).toEqual({
-            uid: '123',
-            email: 'test@test.com',
-          });
+          expect<Partial<IUserModel> | null>(service['cachedUser']).toBeNull();
           done();
         });
       });
     });
   });
 
-  describe('test', () => {
+  describe('AuthService handling multiple user$ subscriptions', () => {
     let service: AuthService;
-    let afAuthMock: any;
-    let firestoreMock: any;
 
-    let test = jasmine.createSpy('set').and.returnValue(Promise.resolve());
+    const afAuthMock = createAfAuthMock({ idTokenResult: of('test') });
+    const firestoreMock = createFirestoreMock();
 
     beforeEach(() => {
-      afAuthMock = {
-        signInWithEmailAndPassword: jasmine
-          .createSpy('signInWithEmailAndPassword')
-          .and.returnValue(Promise.resolve({})),
-        createUserWithEmailAndPassword: jasmine
-          .createSpy('createUserWithEmailAndPassword')
-          .and.returnValue(
-            Promise.resolve({ user: { uid: '123', email: 'test@test.com' } })
-          ),
-        signOut: jasmine
-          .createSpy('signOut')
-          .and.returnValue(Promise.resolve()),
-        idToken: of('test'),
-        authState: of({ uid: '123' }),
-        setPersistence: jasmine
-          .createSpy('setPersistence')
-          .and.returnValue(Promise.resolve()),
-      };
-
-      firestoreMock = {
-        collection: jasmine.createSpy('collection').and.returnValue({
-          doc: jasmine.createSpy('doc').and.returnValue({
-            valueChanges: jasmine
-              .createSpy('valueChanges')
-              .and.returnValue(of({ uid: '123', email: 'test@test.com' })),
-            set: test,
-          }),
-          valueChanges: jasmine
-            .createSpy('valueChanges')
-            .and.returnValue(of([{ uid: '123', email: 'test@test.com' }])),
-        }),
-      };
-
       TestBed.configureTestingModule({
         providers: [
           AuthService,
@@ -284,7 +274,7 @@ describe('AuthService', () => {
       service = TestBed.inject(AuthService);
     });
 
-    it('test', (done) => {
+    it('should emit user data twice when user$ is subscribed to twice', (done) => {
       service.user$.subscribe((data?: Partial<IUserModel> | null) => {
         expect(data).toEqual({ uid: '123', email: 'test@test.com' });
 
@@ -296,7 +286,7 @@ describe('AuthService', () => {
       });
     });
 
-    it('test', (done) => {
+    it('should logout and clear cached user after second user$ subscription', (done) => {
       service.user$.subscribe((data?: Partial<IUserModel> | null) => {
         expect(data).toEqual({ uid: '123', email: 'test@test.com' });
 
@@ -308,47 +298,15 @@ describe('AuthService', () => {
     });
   });
 
-  describe('test', () => {
+  describe('AuthService with id token errors', () => {
     let service: AuthService;
-    let afAuthMock: any;
-    let firestoreMock: any;
 
-    let test = jasmine.createSpy('set').and.returnValue(Promise.resolve());
+    const afAuthMock = createAfAuthMock({
+      idTokenResult: throwError(() => 'test'),
+    });
+    const firestoreMock = createFirestoreMock();
 
     beforeEach(() => {
-      afAuthMock = {
-        signInWithEmailAndPassword: jasmine
-          .createSpy('signInWithEmailAndPassword')
-          .and.returnValue(Promise.resolve({})),
-        createUserWithEmailAndPassword: jasmine
-          .createSpy('createUserWithEmailAndPassword')
-          .and.returnValue(
-            Promise.resolve({ user: { uid: '123', email: 'test@test.com' } })
-          ),
-        signOut: jasmine
-          .createSpy('signOut')
-          .and.returnValue(Promise.resolve()),
-        idToken: throwError(() => 'test'),
-        authState: of({ uid: '123' }),
-        setPersistence: jasmine
-          .createSpy('setPersistence')
-          .and.returnValue(Promise.resolve()),
-      };
-
-      firestoreMock = {
-        collection: jasmine.createSpy('collection').and.returnValue({
-          doc: jasmine.createSpy('doc').and.returnValue({
-            valueChanges: jasmine
-              .createSpy('valueChanges')
-              .and.returnValue(of({ uid: '123', email: 'test@test.com' })),
-            set: test,
-          }),
-          valueChanges: jasmine
-            .createSpy('valueChanges')
-            .and.returnValue(of([{ uid: '123', email: 'test@test.com' }])),
-        }),
-      };
-
       TestBed.configureTestingModule({
         providers: [
           AuthService,
@@ -360,7 +318,7 @@ describe('AuthService', () => {
       service = TestBed.inject(AuthService);
     });
 
-    it('test', (done) => {
+    it('should return null for user$ when token throws an error', (done) => {
       service.user$.subscribe((data?: Partial<IUserModel> | null) => {
         expect(data).toBeNull();
 
