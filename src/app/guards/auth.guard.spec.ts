@@ -36,7 +36,12 @@ describe('authGuard', () => {
   });
 
   it('should allow navigation if user is authenticated', (done) => {
-    authServiceSpy.user$ = of({ uid: '123', email: 'test@test.com' });
+    authServiceSpy.user$ = of({
+      uid: '123',
+      email: 'test@test.com',
+      name: 'User Test',
+      profile: 'user',
+    });
 
     const routeMock = {} as ActivatedRouteSnapshot;
     const stateMock = {} as RouterStateSnapshot;

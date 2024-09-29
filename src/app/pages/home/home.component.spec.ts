@@ -23,9 +23,21 @@ describe('HomeComponent', () => {
     ]);
     router = jasmine.createSpyObj('Router', ['navigate']);
 
-    authService.user$ = of({ profile: 'administrator' });
+    authService.user$ = of({
+      uid: 'test',
+      profile: 'administrator',
+      name: 'User Test',
+      email: 'test@example.com',
+    });
     authService.listUsers.and.returnValue(
-      of([{ name: 'User Test', email: 'test@example.com', profile: 'user' }])
+      of([
+        {
+          uid: 'test',
+          name: 'User Test',
+          email: 'test@example.com',
+          profile: 'user',
+        },
+      ])
     );
     authService.logout.and.returnValue(of(void 0));
 

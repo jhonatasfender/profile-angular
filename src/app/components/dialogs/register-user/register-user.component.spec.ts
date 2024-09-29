@@ -88,11 +88,12 @@ describe('RegisterUserComponent', () => {
     component.save();
 
     expect(authServiceSpy.register).toHaveBeenCalledTimes(1);
-    expect(authServiceSpy.register).toHaveBeenCalledWith(
-      'test@example.com',
-      'password123',
-      { name: 'Test User', profile: 'administrator' }
-    );
+    expect(authServiceSpy.register).toHaveBeenCalledWith({
+      name: 'Test User',
+      email: 'test@example.com',
+      password: 'password123',
+      profile: 'administrator',
+    });
   });
 
   it('should show validation error when form is invalid', () => {

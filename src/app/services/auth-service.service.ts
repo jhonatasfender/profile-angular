@@ -1,11 +1,11 @@
 import { catchError, from, Observable, of, switchMap } from 'rxjs';
-import { tap } from 'rxjs/operators';
+import { map, tap } from 'rxjs/operators';
 
 import { inject, Injectable } from '@angular/core';
 import { AngularFireAuth } from '@angular/fire/compat/auth';
 import { AngularFirestore } from '@angular/fire/compat/firestore';
 
-import { IUserModel } from '../models/user.model';
+import { IUserModel, IUserWithPasswordModel } from '../models/user.model';
 
 @Injectable({ providedIn: 'root' })
 export class AuthService {
@@ -36,31 +36,27 @@ export class AuthService {
   }
 
   public register(
-    email: string,
-    password: string,
-    profileData: Partial<IUserModel>
+    userData: Omit<IUserWithPasswordModel, 'uid'>
   ): Observable<void> {
     return from(
-      this.angularFireAuth.createUserWithEmailAndPassword(email, password)
+      this.angularFireAuth.createUserWithEmailAndPassword(
+        userData.email,
+        userData.password
+      )
     ).pipe(
-      switchMap(({ user }) => {
-        if (user) {
-          return from(
-            this.firestore
-              .collection(this.USERS_COLLECTION)
-              .doc(user.uid)
-              .set({
-                uid: user.uid,
-                email: user.email,
-                ...profileData,
-              })
-          );
-        }
-        return of(undefined);
-      }),
+      switchMap(({ user }) =>
+        user
+          ? from(
+              this.firestore
+                .collection(this.USERS_COLLECTION)
+                .doc(user.uid)
+                .set({ uid: user.uid, ...userData })
+            )
+          : of()
+      ),
       catchError((error) => {
         console.error('Erro ao cadastrar usuário:', error);
-        return of(undefined);
+        return of();
       })
     );
   }
@@ -79,52 +75,38 @@ export class AuthService {
 
   public listUsers(): Observable<IUserModel[]> {
     return this.firestore
-      .collection(this.USERS_COLLECTION)
-      .valueChanges() as Observable<IUserModel[]>;
+      .collection<IUserModel>(this.USERS_COLLECTION)
+      .valueChanges();
   }
 
-  private getLoggedInUserData(): Observable<IUserModel | null | undefined> {
-    if (this.cachedUser) {
-      return of(this.cachedUser);
-    }
-
+  private getLoggedInUserData(): Observable<IUserModel | null> {
     return this.angularFireAuth.idToken.pipe(
-      switchMap((token) => {
-        if (!token) {
+      switchMap((token) =>
+        !token ? of(null) : this.angularFireAuth.authState
+      ),
+      switchMap((user) => {
+        if (!user) {
           return of(null);
-        } 
+        }
 
-        return this.angularFireAuth.authState.pipe(
-          switchMap((user) => {
-            if (this.cachedUser) {
-              return of(this.cachedUser);
-            }
+        if (this.cachedUser) {
+          return of(this.cachedUser);
+        }
 
-            if (user) {
-              return this.firestore
-                .collection(this.USERS_COLLECTION)
-                .doc<IUserModel>(user.uid)
-                .valueChanges()
-                .pipe(
-                  tap((userData) => {
-                    if (userData) {
-                      this.cachedUser = userData;
-                    }
-                  }),
-                  switchMap((user) => {
-                    if (this.cachedUser) {
-                      return of(this.cachedUser);
-                    }
-
-                    return of(user);
-                  })
-                );
-            }
-
-            return of(null);
-          })
-        );
-      })
+        return this.firestore
+          .collection(this.USERS_COLLECTION)
+          .doc<IUserModel>(user.uid)
+          .valueChanges()
+          .pipe(
+            tap((userData) => {
+              if (userData && userData !== this.cachedUser) {
+                this.cachedUser = userData;
+              }
+            }),
+            map(() => this.cachedUser)
+          );
+      }),
+      catchError(() => of(this.cachedUser))
     );
   }
 }

@@ -1,3 +1,5 @@
+///<reference types="../../node_modules/cypress/types/cypress-global-vars.d.ts" />
+
 import { faker } from '@faker-js/faker';
 
 describe('Login Test', () => {

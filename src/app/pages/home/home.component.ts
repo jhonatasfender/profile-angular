@@ -1,4 +1,4 @@
-import { switchMap } from 'rxjs';
+import { map, switchMap } from 'rxjs';
 
 import { CommonModule } from '@angular/common';
 import { Component, DestroyRef, inject, OnInit } from '@angular/core';
@@ -9,7 +9,7 @@ import { MatTableModule } from '@angular/material/table';
 import { Router } from '@angular/router';
 
 import { RegisterUserComponent } from '../../components/dialogs/register-user/register-user.component';
-import { IUserModel } from '../../models/user.model';
+import { IUserModel, IUserWithoutUIDModel } from '../../models/user.model';
 import { AuthService } from '../../services/auth-service.service';
 
 @Component({
@@ -26,7 +26,7 @@ export class HomeComponent implements OnInit {
   private readonly destroyRef = inject(DestroyRef);
 
   public displayedColumns = ['name', 'email', 'profile'];
-  public dataSource: IUserModel[] = [];
+  public dataSource: IUserWithoutUIDModel[] = [];
   public userProfile?: string | null = null;
   public isAdmin = false;
 
@@ -39,8 +39,6 @@ export class HomeComponent implements OnInit {
     this.authService.user$
       .pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe((user) => {
-        console.log('===============>>>>>>>>>>>>>>>>>>>>>>>>>>', user);
-
         if (user) {
           this.userProfile = user.profile;
           this.isAdmin = user.profile === 'administrator';
@@ -51,7 +49,12 @@ export class HomeComponent implements OnInit {
   private loadUsersList(): void {
     this.authService
       .listUsers()
-      .pipe(takeUntilDestroyed(this.destroyRef))
+      .pipe(
+        takeUntilDestroyed(this.destroyRef),
+        map<IUserModel[], IUserWithoutUIDModel[]>((users) =>
+          users.map(({ uid, ...userData }) => userData)
+        )
+      )
       .subscribe((users) => {
         this.dataSource = users;
       });
@@ -63,7 +66,10 @@ export class HomeComponent implements OnInit {
       .afterClosed()
       .pipe(
         takeUntilDestroyed(this.destroyRef),
-        switchMap(() => this.authService.listUsers())
+        switchMap(() => this.authService.listUsers()),
+        map<IUserModel[], IUserWithoutUIDModel[]>((users) =>
+          users.map(({ uid, ...userData }) => userData)
+        )
       )
       .subscribe((users) => (this.dataSource = users));
   }

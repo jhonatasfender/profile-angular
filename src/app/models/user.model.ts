@@ -1,6 +1,12 @@
 export interface IUserModel {
-  uid?: string | null;
-  name?: string | null;
-  profile?: string | null;
-  email?: string | null;
+  readonly uid: string;
+  readonly name: string;
+  readonly profile: string;
+  readonly email: string;
 }
+
+export interface IUserWithPasswordModel extends IUserModel {
+  readonly password: string;
+}
+
+export interface IUserWithoutUIDModel extends Omit<IUserModel, 'uid'> {}

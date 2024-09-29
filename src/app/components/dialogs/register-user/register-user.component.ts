@@ -2,8 +2,8 @@ import { catchError, of } from 'rxjs';
 
 import { Component, inject } from '@angular/core';
 import {
-  FormBuilder,
   FormsModule,
+  NonNullableFormBuilder,
   ReactiveFormsModule,
   Validators,
 } from '@angular/forms';
@@ -18,6 +18,7 @@ import { MatInputModule } from '@angular/material/input';
 import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
 
 import { AuthService } from '../../../services/auth-service.service';
+import { RegisterUserForm } from './register-user.structure';
 
 @Component({
   selector: 'app-register-user',
@@ -36,12 +37,12 @@ import { AuthService } from '../../../services/auth-service.service';
   styleUrls: ['./register-user.component.scss'],
 })
 export class RegisterUserComponent {
-  private fb = inject(FormBuilder);
+  private fb = inject(NonNullableFormBuilder);
   private readonly authService = inject(AuthService);
   private readonly snackBar = inject(MatSnackBar);
   private readonly dialogRef = inject(MatDialogRef<RegisterUserComponent>);
 
-  public form = this.fb.group({
+  public form = this.fb.group<RegisterUserForm>({
     name: ['', Validators.required],
     email: ['', [Validators.required, Validators.email]],
     password: ['', Validators.required],
@@ -50,15 +51,10 @@ export class RegisterUserComponent {
 
   public save(): void {
     if (this.form.valid) {
+      const formData = this.form.getRawValue();
+
       this.authService
-        .register(
-          this.form.controls.email.value!,
-          this.form.controls.password.value!,
-          {
-            name: this.form.controls.name.value!,
-            profile: this.form.controls.profile.value!,
-          }
-        )
+        .register(formData)
         .pipe(
           catchError(() => {
             this.snackBar.open('Erro ao cadastrar usuário', 'Fechar', {
